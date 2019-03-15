@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: eMark
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# eMark_enable (bool):	Set to NO by default.
+#				Set it to YES to enable eMark.
+# eMark_config (path):	Set to /usr/local/etc/eMark.conf
+#				by default.
+# eMark_user:	The user account eMark daemon runs as
+#				It uses 'root' user by default.
+# eMark_group:	The group account eMark daemon runs as
+#				It uses 'wheel' group by default.
+# eMark_datadir (str):	Default to "/var/db/eMark"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=eMark
+rcvar=eMark_enable
+
+load_rc_config $name
+
+: ${eMark_enable:=NO}
+: ${eMark_config=/data/nodes/db/emark/eMark.conf}
+: ${eMark_datadir=/data/nodes/db/emark}
+: ${eMark_user="root"}
+: ${eMark_group="wheel"}
+
+required_files=${eMark_config}
+command=/usr/local/bin/eMarkd
+eMark_chdir=${eMark_datadir}
+pidfile="${eMark_datadir}/eMarkd.pid"
+stop_cmd=eMark_stop
+command_args="-conf=${eMark_config} -datadir=${eMark_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+
+eMark_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${eMark_datadir}
+	[ $? -eq 0 ] && chown -R ${eMark_user}:${eMark_group} ${eMark_datadir}
+	ln -s ${eMark_datadir} /.eMark
+}
+
+eMark_prestart()
+{
+	if [ ! -d "${eMark_datadir}/." ]; then
+		eMark_create_datadir || return 1
+	fi
+}
+
+eMark_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+eMark_stop()
+{
+    eMark_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${eMark_config} -datadir=${eMark_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+load_rc_config $name
+run_rc_command "$1"

@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: dollaronline
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# dollaronline_enable (bool):	Set to NO by default.
+#				Set it to YES to enable dollaronline.
+# dollaronline_config (path):	Set to /usr/local/etc/dollaronline.conf
+#				by default.
+# dollaronline_user:	The user account dollaronline daemon runs as
+#				It uses 'root' user by default.
+# dollaronline_group:	The group account dollaronline daemon runs as
+#				It uses 'wheel' group by default.
+# dollaronline_datadir (str):	Default to "/var/db/dollaronline"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=dollaronline
+rcvar=dollaronline_enable
+
+load_rc_config $name
+
+: ${dollaronline_enable:=NO}
+: ${dollaronline_config=/data/nodes/db/dollaronline/dollaronline.conf}
+: ${dollaronline_datadir=/data/nodes/db/dollaronline}
+: ${dollaronline_user="root"}
+: ${dollaronline_group="wheel"}
+
+required_files=${dollaronline_config}
+command=/usr/local/bin/dollaronlined
+cli_command=/usr/local/bin/dollaronline-cli
+dollaronline_chdir=${dollaronline_datadir}
+pidfile="${dollaronline_datadir}/dollaronlined.pid"
+stop_cmd=dollaronline_stop
+command_args="-conf=${dollaronline_config} -datadir=${dollaronline_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=dollaronline_reindex
+extra_commands="reindex"
+
+dollaronline_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${dollaronline_datadir}
+	[ $? -eq 0 ] && chown -R ${dollaronline_user}:${dollaronline_group} ${dollaronline_datadir}
+	ln -s ${dollaronline_datadir} /.dollaronline
+}
+
+dollaronline_prestart()
+{
+	if [ ! -d "${dollaronline_datadir}/." ]; then
+		dollaronline_create_datadir || return 1
+	fi
+}
+
+dollaronline_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+dollaronline_stop()
+{
+    dollaronline_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${dollaronline_config} -datadir=${dollaronline_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+dollaronline_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    dollaronline_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

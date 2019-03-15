@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+
+# PROVIDE: dogecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# dogecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable dogecoin.
+# dogecoin_config (path):	Set to /usr/local/etc/dogecoin.conf
+#				by default.
+# dogecoin_user:	The user account dogecoin daemon runs as
+#				It uses 'dogecoin' user by default.
+# dogecoin_group:	The group account dogecoin daemon runs as
+#				It uses 'dogecoin' group by default.
+# dogecoin_datadir (str):	Default to "/var/db/dogecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=dogecoin
+rcvar=dogecoin_enable
+
+load_rc_config $name
+
+: ${dogecoin_enable:=NO}
+: ${dogecoin_config=/data/nodes/db/dogecoin/dogecoin.conf}
+: ${dogecoin_datadir=/data/nodes/db/dogecoin}
+: ${dogecoin_user="root"}
+: ${dogecoin_group="wheel"}
+
+required_files=${dogecoin_config}
+command=/usr/local/bin/dogecoind
+cli_command=/usr/local/bin/dogecoin-cli
+dogecoin_chdir=${dogecoin_datadir}
+pidfile="${dogecoin_datadir}/dogecoind.pid"
+stop_cmd=dogecoin_stop
+command_args="-conf=${dogecoin_config} -datadir=${dogecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=dogecoin_reindex
+extra_commands="reindex"
+
+dogecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${dogecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${dogecoin_user}:${dogecoin_group} ${dogecoin_datadir}
+}
+
+dogecoin_prestart()
+{
+	if [ ! -d "${dogecoin_datadir}/." ]; then
+		dogecoin_create_datadir || return 1
+	fi
+}
+
+dogecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+dogecoin_stop()
+{
+    dogecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${dogecoin_config} -datadir=${dogecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+dogecoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    dogecoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+load_rc_config $name
+run_rc_command "$1"

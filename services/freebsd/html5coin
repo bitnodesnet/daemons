@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: html5coin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# html5coin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable html5coin.
+# html5coin_config (path):	Set to /usr/local/etc/html5coin.conf
+#				by default.
+# html5coin_user:	The user account html5coin daemon runs as
+#				It uses 'root' user by default.
+# html5coin_group:	The group account html5coin daemon runs as
+#				It uses 'wheel' group by default.
+# html5coin_datadir (str):	Default to "/var/db/html5coin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=html5coin
+rcvar=html5coin_enable
+
+load_rc_config $name
+
+: ${html5coin_enable:=NO}
+: ${html5coin_config=/data/nodes/db/html5coin/html5coin.conf}
+: ${html5coin_datadir=/data/nodes/db/html5coin}
+: ${html5coin_user="root"}
+: ${html5coin_group="wheel"}
+
+required_files=${html5coin_config}
+command=/usr/local/bin/html5coind
+html5coin_chdir=${html5coin_datadir}
+pidfile="${html5coin_datadir}/html5coind.pid"
+stop_cmd=html5coin_stop
+command_args="-conf=${html5coin_config} -datadir=${html5coin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=html5coin_reindex
+extra_commands="reindex"
+
+html5coin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${html5coin_datadir}
+	[ $? -eq 0 ] && chown -R ${html5coin_user}:${html5coin_group} ${html5coin_datadir}
+	#ln -s ${html5coin_datadir} /.html5coin
+}
+
+html5coin_prestart()
+{
+	if [ ! -d "${html5coin_datadir}/." ]; then
+		html5coin_create_datadir || return 1
+	fi
+}
+
+html5coin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+html5coin_stop()
+{
+    html5coin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${html5coin_config} -datadir=${html5coin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+html5coin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    html5coin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

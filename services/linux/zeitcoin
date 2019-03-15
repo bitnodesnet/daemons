@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: zeitcoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# zeitcoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable zeitcoin.
+# zeitcoin_config (path):	Set to /usr/local/etc/zeitcoin.conf
+#				by default.
+# zeitcoin_user:	The user account zeitcoin daemon runs as
+#				It uses 'root' user by default.
+# zeitcoin_group:	The group account zeitcoin daemon runs as
+#				It uses 'wheel' group by default.
+# zeitcoin_datadir (str):	Default to "/var/db/zeitcoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=zeitcoin
+rcvar=zeitcoin_enable
+
+load_rc_config $name
+
+: ${zeitcoin_enable:=NO}
+: ${zeitcoin_config=/data/nodes/db/zeitcoin/zeitcoin.conf}
+: ${zeitcoin_datadir=/data/nodes/db/zeitcoin}
+: ${zeitcoin_user="root"}
+: ${zeitcoin_group="wheel"}
+
+required_files=${zeitcoin_config}
+command=/usr/local/bin/zeitcoind
+cli_command=/usr/local/bin/zeitcoin-cli
+zeitcoin_chdir=${zeitcoin_datadir}
+pidfile="${zeitcoin_datadir}/zeitcoind.pid"
+stop_cmd=zeitcoin_stop
+command_args="-conf=${zeitcoin_config} -datadir=${zeitcoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=zeitcoin_reindex
+extra_commands="reindex"
+
+zeitcoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${zeitcoin_datadir}
+	[ $? -eq 0 ] && chown -R ${zeitcoin_user}:${zeitcoin_group} ${zeitcoin_datadir}
+	ln -s ${zeitcoin_datadir} /.zeitcoin
+}
+
+zeitcoin_prestart()
+{
+	if [ ! -d "${zeitcoin_datadir}/." ]; then
+		zeitcoin_create_datadir || return 1
+	fi
+}
+
+zeitcoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+zeitcoin_stop()
+{
+    zeitcoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${zeitcoin_config} -datadir=${zeitcoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+zeitcoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    zeitcoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: digitalcoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# digitalcoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable digitalcoin.
+# digitalcoin_config (path):	Set to /usr/local/etc/digitalcoin.conf
+#				by default.
+# digitalcoin_user:	The user account digitalcoin daemon runs as
+#				It uses 'root' user by default.
+# digitalcoin_group:	The group account digitalcoin daemon runs as
+#				It uses 'wheel' group by default.
+# digitalcoin_datadir (str):	Default to "/var/db/digitalcoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=digitalcoin
+rcvar=digitalcoin_enable
+load_rc_config $name
+
+: ${digitalcoin_enable:=NO}
+: ${digitalcoin_config=/data/nodes/db/digitalcoin/digitalcoin.conf}
+: ${digitalcoin_datadir=/data/nodes/db/digitalcoin}
+: ${digitalcoin_user="root"}
+: ${digitalcoin_group="wheel"}
+
+required_files=${digitalcoin_config}
+command=/usr/local/bin/digitalcoind
+cli_command=/usr/local/bin/digitalcoin-cli
+digitalcoin_chdir=${digitalcoin_datadir}
+pidfile="${digitalcoin_datadir}/digitalcoind.pid"
+stop_cmd=digitalcoin_stop
+command_args="-conf=${digitalcoin_config} -datadir=${digitalcoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=digitalcoin_reindex
+extra_commands="reindex"
+
+digitalcoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${digitalcoin_datadir}
+	[ $? -eq 0 ] && chown -R ${digitalcoin_user}:${digitalcoin_group} ${digitalcoin_datadir}
+	ln -s ${digitalcoin_datadir} /.digitalcoin
+}
+
+digitalcoin_prestart()
+{
+	if [ ! -d "${digitalcoin_datadir}/." ]; then
+		digitalcoin_create_datadir || return 1
+	fi
+}
+
+digitalcoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+digitalcoin_stop()
+{
+    digitalcoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${digitalcoin_config} -datadir=${digitalcoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+digitalcoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    digitalcoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

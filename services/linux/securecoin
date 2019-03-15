@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: securecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# securecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable securecoin.
+# securecoin_config (path):	Set to /usr/local/etc/securecoin.conf
+#				by default.
+# securecoin_user:	The user account securecoin daemon runs as
+#				It uses 'root' user by default.
+# securecoin_group:	The group account securecoin daemon runs as
+#				It uses 'wheel' group by default.
+# securecoin_datadir (str):	Default to "/var/db/securecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=securecoin
+rcvar=securecoin_enable
+
+load_rc_config $name
+
+: ${securecoin_enable:=NO}
+: ${securecoin_config=/data/nodes/db/securecoin/securecoin.conf}
+: ${securecoin_datadir=/data/nodes/db/securecoin}
+: ${securecoin_user="root"}
+: ${securecoin_group="wheel"}
+
+required_files=${securecoin_config}
+command=/usr/local/bin/securecoind
+cli_command=/usr/local/bin/securecoin-cli
+securecoin_chdir=${securecoin_datadir}
+pidfile="${securecoin_datadir}/securecoind.pid"
+stop_cmd=securecoin_stop
+command_args="-conf=${securecoin_config} -datadir=${securecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=securecoin_reindex
+extra_commands="reindex"
+
+securecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${securecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${securecoin_user}:${securecoin_group} ${securecoin_datadir}
+	ln -s ${securecoin_datadir} /.securecoin
+}
+
+securecoin_prestart()
+{
+	if [ ! -d "${securecoin_datadir}/." ]; then
+		securecoin_create_datadir || return 1
+	fi
+}
+
+securecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+securecoin_stop()
+{
+    securecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${securecoin_config} -datadir=${securecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+securecoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    securecoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

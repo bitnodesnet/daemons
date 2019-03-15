@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: okcash
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# okcash_enable (bool):	Set to NO by default.
+#				Set it to YES to enable okcash.
+# okcash_config (path):	Set to /usr/local/etc/okcash.conf
+#				by default.
+# okcash_user:	The user account okcash daemon runs as
+#				It uses 'root' user by default.
+# okcash_group:	The group account okcash daemon runs as
+#				It uses 'wheel' group by default.
+# okcash_datadir (str):	Default to "/var/db/okcash"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=okcash
+rcvar=okcash_enable
+
+load_rc_config $name
+
+: ${okcash_enable:=NO}
+: ${okcash_config=/data/nodes/db/okcash/okcash.conf}
+: ${okcash_datadir=/data/nodes/db/okcash}
+: ${okcash_user="root"}
+: ${okcash_group="wheel"}
+
+required_files=${okcash_config}
+command=/usr/local/bin/okcashd
+cli_command=/usr/local/bin/okcash-cli
+okcash_chdir=${okcash_datadir}
+pidfile="${okcash_datadir}/okcashd.pid"
+stop_cmd=okcash_stop
+command_args="-conf=${okcash_config} -datadir=${okcash_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=okcash_reindex
+extra_commands="reindex"
+
+okcash_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${okcash_datadir}
+	[ $? -eq 0 ] && chown -R ${okcash_user}:${okcash_group} ${okcash_datadir}
+	ln -s ${okcash_datadir} /.okcash
+}
+
+okcash_prestart()
+{
+	if [ ! -d "${okcash_datadir}/." ]; then
+		okcash_create_datadir || return 1
+	fi
+}
+
+okcash_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+okcash_stop()
+{
+    okcash_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${okcash_config} -datadir=${okcash_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+okcash_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    okcash_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

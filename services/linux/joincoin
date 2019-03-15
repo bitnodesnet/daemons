@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: joincoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# joincoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable joincoin.
+# joincoin_config (path):	Set to /usr/local/etc/joincoin.conf
+#				by default.
+# joincoin_user:	The user account joincoin daemon runs as
+#				It uses 'root' user by default.
+# joincoin_group:	The group account joincoin daemon runs as
+#				It uses 'wheel' group by default.
+# joincoin_datadir (str):	Default to "/var/db/joincoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=joincoin
+rcvar=joincoin_enable
+
+load_rc_config $name
+
+: ${joincoin_enable:=NO}
+: ${joincoin_config=/data/nodes/db/joincoin/joincoin.conf}
+: ${joincoin_datadir=/data/nodes/db/joincoin}
+: ${joincoin_user="root"}
+: ${joincoin_group="wheel"}
+
+required_files=${joincoin_config}
+command=/usr/local/bin/joincoind
+cli_command=/usr/local/bin/joincoin-cli
+joincoin_chdir=${joincoin_datadir}
+pidfile="${joincoin_datadir}/joincoind.pid"
+stop_cmd=joincoin_stop
+command_args="-conf=${joincoin_config} -datadir=${joincoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=joincoin_reindex
+extra_commands="reindex"
+
+joincoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${joincoin_datadir}
+	[ $? -eq 0 ] && chown -R ${joincoin_user}:${joincoin_group} ${joincoin_datadir}
+	ln -s ${joincoin_datadir} /.joincoin
+}
+
+joincoin_prestart()
+{
+	if [ ! -d "${joincoin_datadir}/." ]; then
+		joincoin_create_datadir || return 1
+	fi
+}
+
+joincoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+joincoin_stop()
+{
+    joincoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${joincoin_config} -datadir=${joincoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+joincoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    joincoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

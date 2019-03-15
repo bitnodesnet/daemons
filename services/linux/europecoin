@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: europecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# europecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable europecoin.
+# europecoin_config (path):	Set to /usr/local/etc/europecoin.conf
+#				by default.
+# europecoin_user:	The user account europecoin daemon runs as
+#				It uses 'root' user by default.
+# europecoin_group:	The group account europecoin daemon runs as
+#				It uses 'wheel' group by default.
+# europecoin_datadir (str):	Default to "/var/db/europecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=europecoin
+rcvar=europecoin_enable
+
+load_rc_config $name
+
+: ${europecoin_enable:=NO}
+: ${europecoin_config=/data/nodes/db/europecoin/europecoin.conf}
+: ${europecoin_datadir=/data/nodes/db/europecoin}
+: ${europecoin_user="root"}
+: ${europecoin_group="wheel"}
+
+required_files=${europecoin_config}
+command=/usr/local/bin/europecoind
+cli_command=/usr/local/bin/europecoin-cli
+europecoin_chdir=${europecoin_datadir}
+pidfile="${europecoin_datadir}/europecoind.pid"
+stop_cmd=europecoin_stop
+command_args="-conf=${europecoin_config} -datadir=${europecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=europecoin_reindex
+extra_commands="reindex"
+
+europecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${europecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${europecoin_user}:${europecoin_group} ${europecoin_datadir}
+	ln -s ${europecoin_datadir} /.europecoin
+}
+
+europecoin_prestart()
+{
+	if [ ! -d "${europecoin_datadir}/." ]; then
+		europecoin_create_datadir || return 1
+	fi
+}
+
+europecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+europecoin_stop()
+{
+    europecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${europecoin_config} -datadir=${europecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+europecoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    europecoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

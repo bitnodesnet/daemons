@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: bytecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# bytecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable bytecoin.
+# bytecoin_config (path):	Set to /usr/local/etc/bytecoin.conf
+#				by default.
+# bytecoin_user:	The user account bytecoin daemon runs as
+#				It uses 'root' user by default.
+# bytecoin_group:	The group account bytecoin daemon runs as
+#				It uses 'wheel' group by default.
+# bytecoin_datadir (str):	Default to "/var/db/bytecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=bytecoin
+rcvar=bytecoin_enable
+
+load_rc_config $name
+
+: ${bytecoin_enable:=NO}
+: ${bytecoin_config=/data/nodes/db/bytecoin/bytecoin.conf}
+: ${bytecoin_datadir=/data/nodes/db/bytecoin}
+: ${bytecoin_user="root"}
+: ${bytecoin_group="wheel"}
+
+required_files=${bytecoin_config}
+command=/usr/local/bin/bytecoind
+bytecoin_chdir=${bytecoin_datadir}
+pidfile="${bytecoin_datadir}/bytecoind.pid"
+stop_cmd=bytecoin_stop
+command_args="-conf=${bytecoin_config} -datadir=${bytecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+
+bytecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${bytecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${bytecoin_user}:${bytecoin_group} ${bytecoin_datadir}
+	ln -s ${bytecoin_datadir} /.bytecoin
+}
+
+bytecoin_prestart()
+{
+	if [ ! -d "${bytecoin_datadir}/." ]; then
+		bytecoin_create_datadir || return 1
+	fi
+}
+
+bytecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+bytecoin_stop()
+{
+    bytecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${bytecoin_config} -datadir=${bytecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+load_rc_config $name
+run_rc_command "$1"

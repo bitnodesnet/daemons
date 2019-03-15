@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: bitbay
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# bitbay_enable (bool):	Set to NO by default.
+#				Set it to YES to enable bitbay.
+# bitbay_config (path):	Set to /usr/local/etc/bitbay.conf
+#				by default.
+# bitbay_user:	The user account bitbay daemon runs as
+#				It uses 'root' user by default.
+# bitbay_group:	The group account bitbay daemon runs as
+#				It uses 'wheel' group by default.
+# bitbay_datadir (str):	Default to "/var/db/bitbay"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=bitbay
+rcvar=bitbay_enable
+
+load_rc_config $name
+
+: ${bitbay_enable:=NO}
+: ${bitbay_config=/data/nodes/db/bitbay/bitbay.conf}
+: ${bitbay_datadir=/data/nodes/db/bitbay}
+: ${bitbay_user="root"}
+: ${bitbay_group="wheel"}
+
+required_files=${bitbay_config}
+command=/usr/local/bin/bitbayd
+cli_command=/usr/local/bin/bitbay-cli
+bitbay_chdir=${bitbay_datadir}
+pidfile="${bitbay_datadir}/bitbayd.pid"
+stop_cmd=bitbay_stop
+command_args="-conf=${bitbay_config} -datadir=${bitbay_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=bitbay_reindex
+extra_commands="reindex"
+
+bitbay_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${bitbay_datadir}
+	[ $? -eq 0 ] && chown -R ${bitbay_user}:${bitbay_group} ${bitbay_datadir}
+	ln -s ${bitbay_datadir} /.bitbay
+}
+
+bitbay_prestart()
+{
+	if [ ! -d "${bitbay_datadir}/." ]; then
+		bitbay_create_datadir || return 1
+	fi
+}
+
+bitbay_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+bitbay_stop()
+{
+    bitbay_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${bitbay_config} -datadir=${bitbay_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+bitbay_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    bitbay_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

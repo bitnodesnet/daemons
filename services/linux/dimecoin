@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: dimecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# dimecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable dimecoin.
+# dimecoin_config (path):	Set to /usr/local/etc/dimecoin.conf
+#				by default.
+# dimecoin_user:	The user account dimecoin daemon runs as
+#				It uses 'root' user by default.
+# dimecoin_group:	The group account dimecoin daemon runs as
+#				It uses 'wheel' group by default.
+# dimecoin_datadir (str):	Default to "/var/db/dimecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=dimecoin
+rcvar=dimecoin_enable
+
+load_rc_config $name
+
+: ${dimecoin_enable:=NO}
+: ${dimecoin_config=/data/nodes/db/dimecoin/dimecoin.conf}
+: ${dimecoin_datadir=/data/nodes/db/dimecoin}
+: ${dimecoin_user="root"}
+: ${dimecoin_group="wheel"}
+
+required_files=${dimecoin_config}
+command=/usr/local/bin/dimecoind
+cli_command=/usr/local/bin/dimecoin-cli
+dimecoin_chdir=${dimecoin_datadir}
+pidfile="${dimecoin_datadir}/dimecoind.pid"
+stop_cmd=dimecoin_stop
+command_args="-conf=${dimecoin_config} -datadir=${dimecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=dimecoin_reindex
+extra_commands="reindex"
+
+dimecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${dimecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${dimecoin_user}:${dimecoin_group} ${dimecoin_datadir}
+	ln -s ${dimecoin_datadir} /.dimecoin
+}
+
+dimecoin_prestart()
+{
+	if [ ! -d "${dimecoin_datadir}/." ]; then
+		dimecoin_create_datadir || return 1
+	fi
+}
+
+dimecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+dimecoin_stop()
+{
+    dimecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${dimecoin_config} -datadir=${dimecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+dimecoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    dimecoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

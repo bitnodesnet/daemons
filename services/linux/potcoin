@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: potcoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# potcoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable potcoin.
+# potcoin_config (path):	Set to /usr/local/etc/potcoin.conf
+#				by default.
+# potcoin_user:	The user account potcoin daemon runs as
+#				It uses 'root' user by default.
+# potcoin_group:	The group account potcoin daemon runs as
+#				It uses 'wheel' group by default.
+# potcoin_datadir (str):	Default to "/var/db/potcoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=potcoin
+rcvar=potcoin_enable
+
+load_rc_config $name
+
+: ${potcoin_enable:=NO}
+: ${potcoin_config=/data/nodes/db/potcoin/potcoin.conf}
+: ${potcoin_datadir=/data/nodes/db/potcoin}
+: ${potcoin_user="root"}
+: ${potcoin_group="wheel"}
+
+required_files=${potcoin_config}
+command=/usr/local/bin/potcoind
+cli_command=/usr/local/bin/potcoin-cli
+potcoin_chdir=${potcoin_datadir}
+pidfile="${potcoin_datadir}/potcoind.pid"
+stop_cmd=potcoin_stop
+command_args="-conf=${potcoin_config} -datadir=${potcoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=potcoin_reindex
+extra_commands="reindex"
+
+potcoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${potcoin_datadir}
+	[ $? -eq 0 ] && chown -R ${potcoin_user}:${potcoin_group} ${potcoin_datadir}
+	ln -s ${potcoin_datadir} /.potcoin
+}
+
+potcoin_prestart()
+{
+	if [ ! -d "${potcoin_datadir}/." ]; then
+		potcoin_create_datadir || return 1
+	fi
+}
+
+potcoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+potcoin_stop()
+{
+    potcoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${potcoin_config} -datadir=${potcoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+potcoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    potcoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

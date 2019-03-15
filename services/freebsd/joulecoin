@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: joulecoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# joulecoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable joulecoin.
+# joulecoin_config (path):	Set to /usr/local/etc/joulecoin.conf
+#				by default.
+# joulecoin_user:	The user account joulecoin daemon runs as
+#				It uses 'root' user by default.
+# joulecoin_group:	The group account joulecoin daemon runs as
+#				It uses 'wheel' group by default.
+# joulecoin_datadir (str):	Default to "/var/db/joulecoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=joulecoin
+rcvar=joulecoin_enable
+
+load_rc_config $name
+
+: ${joulecoin_enable:=NO}
+: ${joulecoin_config=/data/nodes/db/joulecoin/joulecoin.conf}
+: ${joulecoin_datadir=/data/nodes/db/joulecoin}
+: ${joulecoin_user="root"}
+: ${joulecoin_group="wheel"}
+
+required_files=${joulecoin_config}
+command=/usr/local/bin/joulecoind
+cli_command=/usr/local/bin/joulecoin-cli
+joulecoin_chdir=${joulecoin_datadir}
+pidfile="${joulecoin_datadir}/joulecoind.pid"
+stop_cmd=joulecoin_stop
+command_args="-conf=${joulecoin_config} -datadir=${joulecoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=joulecoin_reindex
+extra_commands="reindex"
+
+joulecoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${joulecoin_datadir}
+	[ $? -eq 0 ] && chown -R ${joulecoin_user}:${joulecoin_group} ${joulecoin_datadir}
+	ln -s ${joulecoin_datadir} /.joulecoin
+}
+
+joulecoin_prestart()
+{
+	if [ ! -d "${joulecoin_datadir}/." ]; then
+		joulecoin_create_datadir || return 1
+	fi
+}
+
+joulecoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+joulecoin_stop()
+{
+    joulecoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${joulecoin_config} -datadir=${joulecoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+joulecoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    joulecoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

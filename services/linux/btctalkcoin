@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: btctalkcoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# btctalkcoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable btctalkcoin.
+# btctalkcoin_config (path):	Set to /usr/local/etc/btctalkcoin.conf
+#				by default.
+# btctalkcoin_user:	The user account btctalkcoin daemon runs as
+#				It uses 'root' user by default.
+# btctalkcoin_group:	The group account btctalkcoin daemon runs as
+#				It uses 'wheel' group by default.
+# btctalkcoin_datadir (str):	Default to "/var/db/btctalkcoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=btctalkcoin
+rcvar=btctalkcoin_enable
+
+load_rc_config $name
+
+: ${btctalkcoin_enable:=NO}
+: ${btctalkcoin_config=/data/nodes/db/btctalkcoin/btctalkcoin.conf}
+: ${btctalkcoin_datadir=/data/nodes/db/btctalkcoin}
+: ${btctalkcoin_user="root"}
+: ${btctalkcoin_group="wheel"}
+
+required_files=${btctalkcoin_config}
+command=/usr/local/bin/btctalkcoind
+cli_command=/usr/local/bin/btctalkcoin-cli
+btctalkcoin_chdir=${btctalkcoin_datadir}
+pidfile="${btctalkcoin_datadir}/btctalkcoind.pid"
+stop_cmd=btctalkcoin_stop
+command_args="-conf=${btctalkcoin_config} -datadir=${btctalkcoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=btctalkcoin_reindex
+extra_commands="reindex"
+
+btctalkcoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${btctalkcoin_datadir}
+	[ $? -eq 0 ] && chown -R ${btctalkcoin_user}:${btctalkcoin_group} ${btctalkcoin_datadir}
+	ln -s ${btctalkcoin_datadir} /.btctalkcoin
+}
+
+btctalkcoin_prestart()
+{
+	if [ ! -d "${btctalkcoin_datadir}/." ]; then
+		btctalkcoin_create_datadir || return 1
+	fi
+}
+
+btctalkcoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+btctalkcoin_stop()
+{
+    btctalkcoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${btctalkcoin_config} -datadir=${btctalkcoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+btctalkcoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    btctalkcoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

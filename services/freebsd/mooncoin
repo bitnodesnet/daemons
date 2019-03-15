@@ -1,0 +1,104 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: mooncoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# mooncoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable mooncoin.
+# mooncoin_config (path):	Set to /usr/local/etc/mooncoin.conf
+#				by default.
+# mooncoin_user:	The user account mooncoin daemon runs as
+#				It uses 'root' user by default.
+# mooncoin_group:	The group account mooncoin daemon runs as
+#				It uses 'wheel' group by default.
+# mooncoin_datadir (str):	Default to "/var/db/mooncoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=mooncoin
+rcvar=mooncoin_enable
+
+load_rc_config $name
+
+: ${mooncoin_enable:=NO}
+: ${mooncoin_config=/data/nodes/db/mooncoin/mooncoin.conf}
+: ${mooncoin_datadir=/data/nodes/db/mooncoin}
+: ${mooncoin_user="root"}
+: ${mooncoin_group="wheel"}
+
+required_files=${mooncoin_config}
+command=/usr/local/bin/mooncoind
+cli_command=/usr/local/bin/mooncoin-cli
+mooncoin_chdir=${mooncoin_datadir}
+pidfile="${mooncoin_datadir}/mooncoind.pid"
+stop_cmd=mooncoin_stop
+command_args="-conf=${mooncoin_config} -datadir=${mooncoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd="${name}_reindex"
+salvage_cmd="${name}_salvage"
+extra_commands="reindex salvage"
+
+mooncoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${mooncoin_datadir}
+	[ $? -eq 0 ] && chown -R ${mooncoin_user}:${mooncoin_group} ${mooncoin_datadir}
+	ln -s ${mooncoin_datadir} /.mooncoin
+}
+
+mooncoin_prestart()
+{
+	if [ ! -d "${mooncoin_datadir}/." ]; then
+		mooncoin_create_datadir || return 1
+	fi
+}
+
+mooncoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+mooncoin_stop()
+{
+    mooncoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${mooncoin_config} -datadir=${mooncoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+mooncoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    mooncoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+mooncoin_salvage()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    mooncoin_stop
+	fi
+
+	echo "Attempting to salvage ${name} walllet."
+	command_args="${command_args} -salvagewallet"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

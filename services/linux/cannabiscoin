@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: cannabiscoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# cannabiscoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable cannabiscoin.
+# cannabiscoin_config (path):	Set to /usr/local/etc/cannabiscoin.conf
+#				by default.
+# cannabiscoin_user:	The user account cannabiscoin daemon runs as
+#				It uses 'root' user by default.
+# cannabiscoin_group:	The group account cannabiscoin daemon runs as
+#				It uses 'wheel' group by default.
+# cannabiscoin_datadir (str):	Default to "/var/db/cannabiscoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=cannabiscoin
+rcvar=cannabiscoin_enable
+
+load_rc_config $name
+
+: ${cannabiscoin_enable:=NO}
+: ${cannabiscoin_config=/data/nodes/db/cannabiscoin/cannabiscoin.conf}
+: ${cannabiscoin_datadir=/data/nodes/db/cannabiscoin}
+: ${cannabiscoin_user="root"}
+: ${cannabiscoin_group="wheel"}
+
+required_files=${cannabiscoin_config}
+command=/usr/local/bin/cannabiscoind
+cli_command=/usr/local/bin/cannabiscoin-cli
+cannabiscoin_chdir=${cannabiscoin_datadir}
+pidfile="${cannabiscoin_datadir}/cannabiscoind.pid"
+stop_cmd=cannabiscoin_stop
+command_args="-conf=${cannabiscoin_config} -datadir=${cannabiscoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=cannabiscoin_reindex
+extra_commands="reindex"
+
+cannabiscoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${cannabiscoin_datadir}
+	[ $? -eq 0 ] && chown -R ${cannabiscoin_user}:${cannabiscoin_group} ${cannabiscoin_datadir}
+	ln -s ${cannabiscoin_datadir} /.cannabiscoin
+}
+
+cannabiscoin_prestart()
+{
+	if [ ! -d "${cannabiscoin_datadir}/." ]; then
+		cannabiscoin_create_datadir || return 1
+	fi
+}
+
+cannabiscoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+cannabiscoin_stop()
+{
+    cannabiscoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${cannabiscoin_config} -datadir=${cannabiscoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+cannabiscoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    cannabiscoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

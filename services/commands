@@ -1,0 +1,73 @@
+bytecoind
+dogecoind
+emarkd
+joulecoind
+mooncoind
+peercoind
+auroracoind
+digitalcoind
+earthcoind
+html5coind
+mazacoind
+nautiluscoind
+verged
+
+FreeBSD
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/bytecoind -datadir=/data/nodes/db/bytecoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/dogecoind -datadir=/data/nodes/db/dogecoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/emarkd -datadir=/data/nodes/db/emark
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/joulecoind -datadir=/data/nodes/db/joulecoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/mooncoind -datadir=/data/nodes/db/mooncoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/peercoind -datadir=/data/nodes/db/peercoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/auroracoind -datadir=/data/nodes/db/auroracoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/digitalcoind -datadir=/data/nodes/db/digitalcoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/earthcoind -datadir=/data/nodes/db/earthcoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/html5coind -datadir=/data/nodes/db/html5coin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/mazacoind -datadir=/data/nodes/db/mazacoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/nautiluscoind -datadir=/data/nodes/db/nautiluscoin
+LD_LIBRARY_PATH=/data/nodes/lib/freebsd/lib /data/nodes/daemons/freebsd/verged -datadir=/data/nodes/db/verge
+
+Linux
+
+asiacoind
+cannacoind
+earthcoind
+potcoind
+securecoind
+teslacoind
+batad
+europecoind
+zeitcoind
+bitbayd
+digitalcoind
+joincoind
+zetacoind
+btctalkcoind
+dimecoind
+mazad
+cannabiscoind
+dollaronlined
+okcashd
+
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/asiacoind -datadir=/data/nodes/db/asiacoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/cannacoind -datadir=/data/nodes/db/cannacoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/earthcoind -datadir=/data/nodes/db/earthcoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/potcoind -datadir=/data/nodes/db/potcoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/securecoind -datadir=/data/nodes/db/securecoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/teslacoind -datadir=/data/nodes/db/teslacoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/batad -datadir=/data/nodes/db/bata
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/europecoind -datadir=/data/nodes/db/europecoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/zeitcoind -datadir=/data/nodes/db/zeitcoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/bitbayd -datadir=/data/nodes/db/bitbay
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/digitalcoind -datadir=/data/nodes/db/digitalcoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/joincoind -datadir=/data/nodes/db/joincoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/zetacoind -datadir=/data/nodes/db/zetacoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/btctalkcoind -datadir=/data/nodes/db/btctalkcoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/dimecoind -datadir=/data/nodes/db/dimecoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/mazad -datadir=/data/nodes/db/maza
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/cannabiscoind -datadir=/data/nodes/db/cannabiscoin
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/dollaronlined -datadir=/data/nodes/db/dollaronline
+LD_LIBRARY_PATH=/data/nodes/lib/linux/lib /data/nodes/daemons/linux/okcashd -datadir=/data/nodes/db/okcash
+
+
+

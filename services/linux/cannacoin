@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: cannacoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# cannacoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable cannacoin.
+# cannacoin_config (path):	Set to /usr/local/etc/cannacoin.conf
+#				by default.
+# cannacoin_user:	The user account cannacoin daemon runs as
+#				It uses 'root' user by default.
+# cannacoin_group:	The group account cannacoin daemon runs as
+#				It uses 'wheel' group by default.
+# cannacoin_datadir (str):	Default to "/var/db/cannacoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=cannacoin
+rcvar=cannacoin_enable
+
+load_rc_config $name
+
+: ${cannacoin_enable:=NO}
+: ${cannacoin_config=/data/nodes/db/cannacoin/cannacoin.conf}
+: ${cannacoin_datadir=/data/nodes/db/cannacoin}
+: ${cannacoin_user="root"}
+: ${cannacoin_group="wheel"}
+
+required_files=${cannacoin_config}
+command=/usr/local/bin/cannacoind
+cli_command=/usr/local/bin/cannacoin-cli
+cannacoin_chdir=${cannacoin_datadir}
+pidfile="${cannacoin_datadir}/cannacoind.pid"
+stop_cmd=cannacoin_stop
+command_args="-conf=${cannacoin_config} -datadir=${cannacoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=cannacoin_reindex
+extra_commands="reindex"
+
+cannacoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${cannacoin_datadir}
+	[ $? -eq 0 ] && chown -R ${cannacoin_user}:${cannacoin_group} ${cannacoin_datadir}
+	ln -s ${cannacoin_datadir} /.cannacoin
+}
+
+cannacoin_prestart()
+{
+	if [ ! -d "${cannacoin_datadir}/." ]; then
+		cannacoin_create_datadir || return 1
+	fi
+}
+
+cannacoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+cannacoin_stop()
+{
+    cannacoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${cannacoin_config} -datadir=${cannacoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+cannacoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    cannacoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

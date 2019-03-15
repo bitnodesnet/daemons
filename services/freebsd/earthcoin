@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+
+# PROVIDE: earthcoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# earthcoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable earthcoin.
+# earthcoin_config (path):	Set to /usr/local/etc/earthcoin.conf
+#				by default.
+# earthcoin_user:	The user account earthcoin daemon runs as
+#				It uses 'root' user by default.
+# earthcoin_group:	The group account earthcoin daemon runs as
+#				It uses 'wheel' group by default.
+# earthcoin_datadir (str):	Default to "/var/db/earthcoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=earthcoin
+rcvar=earthcoin_enable
+
+load_rc_config $name
+
+: ${earthcoin_enable:=NO}
+: ${earthcoin_config=/data/nodes/db/earthcoin/earthcoin.conf}
+: ${earthcoin_datadir=/data/nodes/db/earthcoin}
+: ${earthcoin_user="root"}
+: ${earthcoin_group="wheel"}
+
+required_files=${earthcoin_config}
+command=/usr/local/bin/earthcoind
+earthcoin_chdir=${earthcoin_datadir}
+pidfile="${earthcoin_datadir}/earthcoind.pid"
+stop_cmd=earthcoin_stop
+command_args="-conf=${earthcoin_config} -datadir=${earthcoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+
+earthcoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${earthcoin_datadir}
+	[ $? -eq 0 ] && chown -R ${earthcoin_user}:${earthcoin_group} ${earthcoin_datadir}
+	#ln -s ${earthcoin_datadir} /.earthcoin
+}
+
+earthcoin_prestart()
+{
+	if [ ! -d "${earthcoin_datadir}/." ]; then
+		earthcoin_create_datadir || return 1
+	fi
+}
+
+earthcoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+earthcoin_stop()
+{
+    earthcoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${earthcoin_config} -datadir=${earthcoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+load_rc_config $name
+run_rc_command "$1"

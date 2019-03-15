@@ -1,0 +1,91 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: VERGE
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# VERGE_enable (bool):	Set to NO by default.
+#				Set it to YES to enable VERGE.
+# VERGE_config (path):	Set to /usr/local/etc/VERGE.conf
+#				by default.
+# VERGE_user:	The user account VERGE daemon runs as
+#				It uses 'root' user by default.
+# VERGE_group:	The group account VERGE daemon runs as
+#				It uses 'wheel' group by default.
+# VERGE_datadir (str):	Default to "/var/db/VERGE"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=VERGE
+rcvar=VERGE_enable
+
+load_rc_config $name
+
+: ${VERGE_enable:=NO}
+: ${VERGE_config=/data/nodes/db/verge/VERGE.conf}
+: ${VERGE_datadir=/data/nodes/db/verge}
+: ${VERGE_user="root"}
+: ${VERGE_group="wheel"}
+
+required_files=${VERGE_config}
+command=/usr/local/bin/VERGEd
+VERGE_chdir=${VERGE_datadir}
+pidfile="${VERGE_datadir}/VERGEd.pid"
+stop_cmd=VERGE_stop
+command_args="-conf=${VERGE_config} -datadir=${VERGE_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=VERGE_reindex
+extra_commands="reindex"
+
+VERGE_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${VERGE_datadir}
+	[ $? -eq 0 ] && chown -R ${VERGE_user}:${VERGE_group} ${VERGE_datadir}
+	ln -s ${VERGE_datadir} /.VERGE
+}
+
+VERGE_prestart()
+{
+	if [ ! -d "${VERGE_datadir}/." ]; then
+		VERGE_create_datadir || return 1
+	fi
+}
+
+VERGE_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+VERGE_stop()
+{
+    VERGE_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${VERGE_config} -datadir=${VERGE_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+VERGE_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    VERGE_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

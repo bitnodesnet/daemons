@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: teslacoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# teslacoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable teslacoin.
+# teslacoin_config (path):	Set to /usr/local/etc/teslacoin.conf
+#				by default.
+# teslacoin_user:	The user account teslacoin daemon runs as
+#				It uses 'root' user by default.
+# teslacoin_group:	The group account teslacoin daemon runs as
+#				It uses 'wheel' group by default.
+# teslacoin_datadir (str):	Default to "/var/db/teslacoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=teslacoin
+rcvar=teslacoin_enable
+
+load_rc_config $name
+
+: ${teslacoin_enable:=NO}
+: ${teslacoin_config=/data/nodes/db/teslacoin/teslacoin.conf}
+: ${teslacoin_datadir=/data/nodes/db/teslacoin}
+: ${teslacoin_user="root"}
+: ${teslacoin_group="wheel"}
+
+required_files=${teslacoin_config}
+command=/usr/local/bin/teslacoind
+cli_command=/usr/local/bin/teslacoin-cli
+teslacoin_chdir=${teslacoin_datadir}
+pidfile="${teslacoin_datadir}/teslacoind.pid"
+stop_cmd=teslacoin_stop
+command_args="-conf=${teslacoin_config} -datadir=${teslacoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=teslacoin_reindex
+extra_commands="reindex"
+
+teslacoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${teslacoin_datadir}
+	[ $? -eq 0 ] && chown -R ${teslacoin_user}:${teslacoin_group} ${teslacoin_datadir}
+	ln -s ${teslacoin_datadir} /.teslacoin
+}
+
+teslacoin_prestart()
+{
+	if [ ! -d "${teslacoin_datadir}/." ]; then
+		teslacoin_create_datadir || return 1
+	fi
+}
+
+teslacoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+teslacoin_stop()
+{
+    teslacoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${teslacoin_config} -datadir=${teslacoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+teslacoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    teslacoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

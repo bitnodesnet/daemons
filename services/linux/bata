@@ -1,0 +1,92 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: bata
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# bata_enable (bool):	Set to NO by default.
+#				Set it to YES to enable bata.
+# bata_config (path):	Set to /usr/local/etc/bata.conf
+#				by default.
+# bata_user:	The user account bata daemon runs as
+#				It uses 'root' user by default.
+# bata_group:	The group account bata daemon runs as
+#				It uses 'wheel' group by default.
+# bata_datadir (str):	Default to "/var/db/bata"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=bata
+rcvar=bata_enable
+
+load_rc_config $name
+
+: ${bata_enable:=NO}
+: ${bata_config=/data/nodes/db/bata/bata.conf}
+: ${bata_datadir=/data/nodes/db/bata}
+: ${bata_user="root"}
+: ${bata_group="wheel"}
+
+required_files=${bata_config}
+command=/usr/local/bin/batad
+cli_command=/usr/local/bin/bata-cli
+bata_chdir=${bata_datadir}
+pidfile="${bata_datadir}/batad.pid"
+stop_cmd=bata_stop
+command_args="-conf=${bata_config} -datadir=${bata_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd=bata_reindex
+extra_commands="reindex"
+
+bata_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${bata_datadir}
+	[ $? -eq 0 ] && chown -R ${bata_user}:${bata_group} ${bata_datadir}
+	ln -s ${bata_datadir} /.bata
+}
+
+bata_prestart()
+{
+	if [ ! -d "${bata_datadir}/." ]; then
+		bata_create_datadir || return 1
+	fi
+}
+
+bata_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+bata_stop()
+{
+    bata_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${bata_config} -datadir=${bata_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+bata_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    bata_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

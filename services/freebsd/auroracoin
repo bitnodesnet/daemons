@@ -1,0 +1,104 @@
+#!/bin/sh
+#
+# $FreeBSD: $
+#
+
+# PROVIDE: auroracoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# auroracoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable auroracoin.
+# auroracoin_config (path):	Set to /usr/local/etc/auroracoin.conf
+#				by default.
+# auroracoin_user:	The user account auroracoin daemon runs as
+#				It uses 'root' user by default.
+# auroracoin_group:	The group account auroracoin daemon runs as
+#				It uses 'wheel' group by default.
+# auroracoin_datadir (str):	Default to "/var/db/auroracoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=auroracoin
+rcvar=auroracoin_enable
+
+load_rc_config $name
+
+: ${auroracoin_enable:=NO}
+: ${auroracoin_config=/data/nodes/db/aurora/auroracoin.conf}
+: ${auroracoin_datadir=/data/nodes/db/auroracoin}
+: ${auroracoin_user="root"}
+: ${auroracoin_group="wheel"}
+
+required_files=${auroracoin_config}
+command=/usr/local/bin/auroracoind
+cli_command=/usr/local/bin/auroracoin-cli
+auroracoin_chdir=${auroracoin_datadir}
+pidfile="${auroracoin_datadir}/auroracoind.pid"
+stop_cmd=auroracoin_stop
+command_args="-conf=${auroracoin_config} -datadir=${auroracoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+reindex_cmd="${name}_reindex"
+salvage_cmd="${name}_salvage"
+extra_commands="reindex salvage"
+
+auroracoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${auroracoin_datadir}
+	[ $? -eq 0 ] && chown -R ${auroracoin_user}:${auroracoin_group} ${auroracoin_datadir}
+	ln -s ${auroracoin_datadir} /.auroracoin
+}
+
+auroracoin_prestart()
+{
+	if [ ! -d "${auroracoin_datadir}/." ]; then
+		auroracoin_create_datadir || return 1
+	fi
+}
+
+auroracoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+auroracoin_stop()
+{
+    auroracoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${cli_command} -conf=${auroracoin_config} -datadir=${auroracoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+auroracoin_reindex()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    auroracoin_stop
+	fi
+
+	echo "Reindexing ${name} blockchain."
+	command_args="${command_args} -reindex"
+	eval ${command} ${command_args}
+}
+
+auroracoin_salvage()
+{
+	if [ -z "$rc_fast" -a -n "$rc_pid" ]; then
+	    auroracoin_stop
+	fi
+
+	echo "Attempting to salvage ${name} walllet."
+	command_args="${command_args} -salvagewallet"
+	eval ${command} ${command_args}
+}
+
+run_rc_command "$1"

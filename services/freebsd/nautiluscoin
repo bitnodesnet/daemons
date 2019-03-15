@@ -1,0 +1,79 @@
+#!/bin/sh
+#
+# $FreeBSD$
+#
+
+# PROVIDE: nautiluscoin
+# REQUIRE: LOGIN
+# KEYWORD: shutdown
+
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# nautiluscoin_enable (bool):	Set to NO by default.
+#				Set it to YES to enable nautiluscoin.
+# nautiluscoin_config (path):	Set to /usr/local/etc/nautiluscoin.conf
+#				by default.
+# nautiluscoin_user:	The user account nautiluscoin daemon runs as
+#				It uses 'root' user by default.
+# nautiluscoin_group:	The group account nautiluscoin daemon runs as
+#				It uses 'wheel' group by default.
+# nautiluscoin_datadir (str):	Default to "/var/db/nautiluscoin"
+#				Base data directory.
+
+. /etc/rc.subr
+
+name=nautiluscoin
+rcvar=nautiluscoin_enable
+
+load_rc_config $name
+
+: ${nautiluscoin_enable:=NO}
+: ${nautiluscoin_config=/data/nodes/db/nautiluscoin/nautiluscoin.conf}
+: ${nautiluscoin_datadir=/data/nodes/db/nautiluscoin}
+: ${nautiluscoin_user="root"}
+: ${nautiluscoin_group="wheel"}
+
+required_files=${nautiluscoin_config}
+command=/usr/local/bin/nautiluscoind
+nautiluscoin_chdir=${nautiluscoin_datadir}
+pidfile="${nautiluscoin_datadir}/nautiluscoind.pid"
+stop_cmd=nautiluscoin_stop
+command_args="-conf=${nautiluscoin_config} -datadir=${nautiluscoin_datadir} -noupnp -daemon -pid=${pidfile}"
+start_precmd="${name}_prestart"
+
+nautiluscoin_create_datadir()
+{
+	echo "Creating data directory"
+	eval mkdir -p ${nautiluscoin_datadir}
+	[ $? -eq 0 ] && chown -R ${nautiluscoin_user}:${nautiluscoin_group} ${nautiluscoin_datadir}
+	#ln -s ${nautiluscoin_datadir} /.nautiluscoin
+}
+
+nautiluscoin_prestart()
+{
+	if [ ! -d "${nautiluscoin_datadir}/." ]; then
+		nautiluscoin_create_datadir || return 1
+	fi
+}
+
+nautiluscoin_requirepidfile()
+{
+	if [ ! "0`check_pidfile ${pidfile} ${command}`" -gt 1 ]; then
+		echo "${name} not running? (check $pidfile)."
+		exit 1
+	fi
+}
+
+nautiluscoin_stop()
+{
+    nautiluscoin_requirepidfile
+
+	echo "Stopping ${name}."
+	eval ${command} -conf=${nautiluscoin_config} -datadir=${nautiluscoin_datadir} stop
+	wait_for_pids ${rc_pid}
+}
+
+load_rc_config $name
+run_rc_command "$1"
